@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>看房評分資料庫 (自2026.07)</title>
+    <style>
+        /* ================= 基礎變數與設計系統 ================= */
+        :root {
+            --bg-main: #0B1120; --bg-panel: #1E293B; --bg-panel-hover: #334155; 
+            --primary: #3B82F6; --primary-hover: #2563EB; --text-main: #F8FAFC; 
+            --text-muted: #94A3B8; --border: #334155; 
+            --success: #10B981; --danger: #EF4444; --warning: #F59E0B;
+            --nav-height: 60px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: var(--bg-main); color: var(--text-main); line-height: 1.5; -webkit-tap-highlight-color: transparent; }
+
+        /* ================= 導覽列與視圖 ================= */
+        nav { position: fixed; top: 0; width: 100%; height: var(--nav-height); background-color: var(--bg-panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 1rem; z-index: 1000; justify-content: space-between; overflow-x: auto; white-space: nowrap;}
+        .nav-brand { font-size: 1.25rem; font-weight: bold; flex-shrink: 0; margin-right: 1rem; color: var(--text-main);}
+        .nav-links { display: flex; gap: 0.5rem; }
+        .nav-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.95rem; cursor: pointer; padding: 0.5rem 0.8rem; border-radius: 4px; transition: 0.2s; min-height: 40px;}
+        .nav-btn:hover { color: var(--text-main); background-color: var(--bg-panel-hover); }
+        .nav-btn.active { color: var(--primary); background-color: rgba(59, 130, 246, 0.1); font-weight: bold; }
+        
+        main { margin-top: var(--nav-height); padding: 2rem 1rem; max-width: 1200px; margin-left: auto; margin-right: auto; word-break: break-word; }
+        .view-section { display: none; animation: fadeIn 0.3s ease; }
+        .view-section.active { display: block; }
+        .page-header { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem;}
+        .page-title { font-size: 1.75rem; font-weight: 600; }
+        .page-subtitle { color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ================= 元件 ================= */
+        .btn { padding: 0.6rem 1rem; border-radius: 6px; border: none; font-size: 0.95rem; cursor: pointer; transition: 0.2s; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 44px; }
+        .btn-primary { background-color: var(--primary); color: white; }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        .btn-success { background-color: var(--success); color: white; }
+        .btn-warning { background-color: var(--warning); color: #000; }
+        .btn-danger { background-color: var(--danger); color: white; }
+        .btn-outline { background-color: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-sm { padding: 0.4rem 0.6rem; font-size: 0.85rem; min-height: 36px; }
+        .btn-huge { padding: 1rem; font-size: 1.1rem; border-radius: 8px; width: 100%; font-weight: bold; }
+
+        .form-section { background-color: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .form-section-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 1rem; color: var(--primary); border-bottom: 1px dashed var(--border); padding-bottom: 0.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 0.5rem;}
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .form-group.full-width { grid-column: 1 / -1; }
+        label { font-size: 0.9rem; color: var(--text-muted); font-weight: 500; }
+        input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 0.8rem; background-color: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; color: var(--text-main); font-size: 1rem; }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        textarea { resize: vertical; min-height: 80px; line-height: 1.5;}
+        
+        .checkbox-group { display: inline-flex; align-items: center; gap: 0.6rem; cursor: pointer; padding: 0.5rem 0;}
+        .checkbox-group input { width: 24px; height: 24px; cursor: pointer;}
+        .auto-calc-wrapper { display: flex; gap: 0.5rem; align-items: center; } .auto-calc-wrapper input { flex: 1; }
+        .btn-reset-auto { background: transparent; border: 1px solid var(--border); color: var(--warning); border-radius: 4px; cursor: pointer; padding: 0.6rem; display: none; font-size: 0.8rem;}
+        .is-manual .btn-reset-auto { display: block; }
+
+        /* ================= 列表與卡片 ================= */
+        .list-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; background: var(--bg-panel); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);}
+        .house-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 4rem;}
+        .house-card { background-color: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; transition: transform 0.2s; position:relative;}
+        .house-card.shortlist { border-color: var(--warning); box-shadow: 0 0 8px rgba(245, 158, 11, 0.2); }
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;}
+        .card-title { font-size: 1.25rem; font-weight: bold; color: var(--primary); margin-bottom: 0.2rem;}
+        .badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 99px; background: #334155; color: white; display: inline-block;}
+        .card-body { font-size: 0.9rem; color: var(--text-muted); flex: 1;}
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 0.3rem;}
+        .data-val { color: var(--text-main); font-weight: 500;}
+        .card-actions { display: flex; gap: 0.5rem; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; align-items:center; flex-wrap: wrap;}
+        .empty-state { text-align: center; padding: 4rem 2rem; background-color: var(--bg-panel); border-radius: 8px; border: 1px dashed var(--border); color: var(--text-muted); }
+
+        /* ================= 評分看板 ================= */
+        .score-banner { background-color: var(--danger); color: white; padding: 1rem; border-radius: 8px; font-weight: bold; text-align: center; margin-bottom: 1.5rem; display: none; position: sticky; top: var(--nav-height); z-index: 900;}
+        .score-dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; background: var(--bg-main); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1.5rem; }
+        .sd-box { text-align: center; padding: 0.5rem; border-radius: 6px; background: rgba(255,255,255,0.02);}
+        .sd-box-title { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+        .sd-box-value { font-size: 1.75rem; font-weight: bold; color: var(--primary); }
+        .sd-box-value.total { font-size: 2.2rem; color: var(--success); }
+        .sd-judgment { grid-column: 1 / -1; text-align: center; font-size: 1.1rem; font-weight: bold; padding-top: 1rem; border-top: 1px dashed var(--border); color: var(--text-main);}
+        .sc-item { background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1.2rem; }
+        .sc-header { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;}
+        .sc-radios { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+        .sc-radios label { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 0.95rem; flex: 1; min-width: 70px; justify-content: center;}
+        .sc-radios label:hover { background: var(--bg-panel-hover); }
+        .sc-radios input[type="radio"] { margin: 0; cursor: pointer; width: 18px; height: 18px;}
+        .sc-tips { font-size: 0.85rem; color: var(--text-muted); background: rgba(59, 130, 246, 0.05); padding: 0.8rem; border-radius: 4px; border-left: 3px solid var(--primary); margin-bottom: 1rem; }
+        .flaw-row { display: flex; justify-content: space-between; align-items: center; margin-top: 0.8rem; padding-top:0.8rem; border-top: 1px dashed var(--border); font-size: 0.9rem; flex-wrap: wrap; gap: 0.5rem;}
+
+        /* ================= Dashboard 統計儀表板 ================= */
+        .dash-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;}
+        .dash-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; text-align: center;}
+        .dash-val { font-size: 2.5rem; font-weight: bold; color: var(--primary); margin: 0.5rem 0;}
+        .dash-label { color: var(--text-muted); font-size: 0.9rem;}
+
+        /* ================= 比較模式 ================= */
+        .compare-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(5px); border-top: 1px solid var(--border); padding: 1rem; display: flex; justify-content: center; align-items: center; gap: 1rem; z-index: 1000; box-shadow: 0 -4px 10px rgba(0,0,0,0.5); transform: translateY(100%); transition: transform 0.3s;}
+        .compare-bar.show { transform: translateY(0); }
+        .cmp-legend { display: flex; gap: 1rem; margin-bottom: 1rem; font-size: 0.85rem; flex-wrap: wrap;}
+        .cmp-badge { padding: 0.3rem 0.6rem; border-radius: 4px; font-weight: bold; }
+        .cmp-best { background: rgba(16,185,129,0.2); color: #34D399; }
+        .cmp-worst { background: rgba(239,68,68,0.2); color: #F87171; }
+        .compare-desktop { overflow-x: auto; background: var(--bg-panel); border-radius: 8px; border: 1px solid var(--border); }
+        .compare-table { width: 100%; border-collapse: collapse; min-width: 800px; }
+        .compare-table th, .compare-table td { border: 1px solid var(--border); padding: 0.8rem; text-align: center; font-size: 0.95rem; }
+        .compare-table th { background: var(--bg-panel-hover); color: var(--text-muted); font-weight: normal; position: sticky; left: 0; z-index: 10; width: 120px;}
+        .compare-table .house-head { font-size: 1.1rem; font-weight: bold; color: var(--primary); background: var(--bg-panel); position: static; width: auto;}
+        .val-best { background: rgba(16,185,129,0.1); color: #34D399; font-weight: bold; }
+        .val-worst { background: rgba(239,68,68,0.1); color: #F87171; text-decoration: underline; }
+        .val-warn { color: var(--warning); font-weight: bold; }
+        .compare-mobile { display: none; flex-direction: column; gap: 1.5rem; }
+        .cmp-m-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+        .cmp-m-title { font-size: 1.25rem; font-weight: bold; color: var(--primary); border-bottom: 2px solid var(--border); padding-bottom: 0.5rem; margin-bottom: 1rem; text-align:center;}
+        .cmp-m-row { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); align-items:flex-start; gap:1rem;}
+        .cmp-m-row:last-child { border-bottom: none; }
+        .cmp-m-label { color: var(--text-muted); font-size: 0.85rem; flex-shrink: 0;}
+        .cmp-m-val { text-align: right; font-size: 0.95rem; word-break: break-word;}
+
+        /* ================= 現場看房 Overlay ================= */
+        .insp-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-main); z-index: 2000; display: none; flex-direction: column; overflow-y: auto;}
+        .insp-overlay.active { display: flex; }
+        .insp-header { padding: 1rem; background: var(--bg-panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10;}
+        .insp-progress-bar { height: 8px; background: var(--bg-main); border-radius: 4px; margin-top: 0.5rem; overflow: hidden; }
+        .insp-progress-fill { height: 100%; background: var(--success); width: 0%; transition: width 0.3s; }
+        .insp-header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;}
+        .insp-body { padding: 1.5rem 1rem; flex: 1; max-width: 600px; margin: 0 auto; width: 100%;}
+        .insp-step-title { font-size: 1.5rem; font-weight: bold; color: var(--text-main); margin-bottom: 1.5rem; line-height: 1.4;}
+        .insp-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1.5rem; }
+        .insp-status-btn { padding: 1rem 0.5rem; font-size: 1.1rem; font-weight: bold; border-radius: 8px; border: 2px solid var(--border); background: var(--bg-panel); color: var(--text-main); cursor: pointer; transition: 0.2s; min-height: 60px;}
+        .insp-status-btn.active { border-color: var(--primary); background: rgba(59, 130, 246, 0.2); }
+        .insp-status-btn.s-good.active { border-color: var(--success); background: rgba(16, 185, 129, 0.2); }
+        .insp-status-btn.s-poor.active { border-color: var(--warning); background: rgba(245, 158, 11, 0.2); }
+        .insp-status-btn.s-flaw { grid-column: 1 / -1; }
+        .insp-status-btn.s-flaw.active { border-color: var(--danger); background: rgba(239, 68, 68, 0.2); color: #F87171;}
+        .insp-reinspect-box { background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; cursor:pointer;}
+        .insp-reinspect-box input { width: 28px; height: 28px; accent-color: var(--warning); pointer-events: none;}
+        .insp-reinspect-box label { font-size: 1.1rem; font-weight: bold; color: var(--warning); margin: 0; pointer-events: none;}
+        .insp-footer { padding: 1rem; background: var(--bg-panel); border-top: 1px solid var(--border); display: flex; gap: 1rem; position: sticky; bottom: 0; flex-wrap: wrap;}
+        .summary-card { background: var(--bg-panel); border-radius: 8px; padding: 1.2rem; margin-bottom: 1rem; border-left: 4px solid var(--primary); }
+        .summary-card.danger { border-left-color: var(--danger); }
+        .summary-card.warning { border-left-color: var(--warning); }
+        .summary-list { margin-left: 1.5rem; margin-top: 0.5rem; color: var(--text-main); font-size: 0.95rem;}
+
+        /* ================= 設定與備份專用 ================= */
+        .settings-card { border: 1px solid var(--border); background: var(--bg-main); border-radius: 6px; padding: 1.5rem; margin-bottom: 1rem;}
+        .alert-box { background: rgba(245,158,11,0.1); border-left: 4px solid var(--warning); padding: 1rem; border-radius: 4px; margin-bottom: 1rem;}
+        input[type="file"] { display: none; }
+
+        @media (max-width: 768px) {
+            .nav-brand { display:none; } .nav-links { width: 100%; justify-content: space-between; overflow-x: auto; -webkit-overflow-scrolling: touch;}
+            .compare-desktop { display: none; }
+            .compare-mobile { display: flex; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav id="main-nav">
+        <div class="nav-brand">看房評分庫 (自2026.07)</div>
+        <div class="nav-links">
+            <button class="nav-btn" data-target="view-dashboard" onclick="app.switchView('view-dashboard')">總覽</button>
+            <button class="nav-btn active" data-target="view-list" onclick="app.switchView('view-list')">列表</button>
+            <button class="nav-btn" data-target="view-form" onclick="app.createNew()">+ 新增</button>
+            <button class="nav-btn" data-target="view-compare" onclick="app.switchView('view-compare')" style="display:none;" id="nav-btn-compare">比較</button>
+            <button class="nav-btn" data-target="view-settings" onclick="app.switchView('view-settings')">⚙️ 設定</button>
+        </div>
+    </nav>
+
+    <main id="main-content">
+        <!-- Dashboard 視圖 -->
+        <section id="view-dashboard" class="view-section">
+            <div class="page-header"><div><h1 class="page-title">總覽 Dashboard</h1></div></div>
+            <div class="dash-stats" id="dash-stats-container">
+                <!-- 由 JS 動態繪製統計 -->
+            </div>
+            <div class="form-section" style="border-color: var(--primary);">
+                <div class="form-section-title">快速入門</div>
+                <p style="color:var(--text-muted); margin-bottom: 1rem;">歡迎使用！本系統完全離線運行，所有資料保存在您的瀏覽器中。第一次使用建議載入示範資料進行體驗。</p>
+                <button class="btn btn-outline" onclick="app.generateDemoData()">📥 載入示範物件</button>
+            </div>
+        </section>
+
+        <!-- 物件列表視圖 -->
+        <section id="view-list" class="view-section active">
+            <div class="page-header">
+                <div><h1 class="page-title">物件列表</h1><div class="page-subtitle" id="list-subtitle"></div></div>
+                <button class="btn btn-primary" onclick="app.createNew()">+ 新增紀錄</button>
+            </div>
+            <div class="list-controls">
+                <input type="text" id="filter-search" placeholder="搜尋建案名稱..." oninput="app.renderList()">
+                <select id="filter-status" onchange="app.renderList()"><option value="">所有狀態</option></select>
+                <select id="sort-by" onchange="app.renderList()">
+                    <option value="updatedAt-desc">更新時間 (新到舊)</option>
+                    <option value="scoreTotal-desc">綜合總分 (高到低)</option>
+                </select>
+            </div>
+            <div id="list-container" class="house-grid"></div>
+        </section>
+
+        <!-- 浮動比較工具列 -->
+        <div id="compare-bar" class="compare-bar">
+            <div>已選 <span id="cmp-count" style="color:var(--primary); font-weight:bold; font-size:1.2rem;">0</span>/4 筆</div>
+            <button class="btn btn-success" onclick="app.switchView('view-compare')">📊 比較</button>
+            <button class="btn btn-outline btn-sm" onclick="app.clearCompare()">清除</button>
+        </div>
+
+        <!-- 比較視圖 -->
+        <section id="view-compare" class="view-section">
+            <div class="page-header">
+                <div><h1 class="page-title">物件比較與決策</h1><div class="page-subtitle">支援最多4筆物件橫向對比。</div></div>
+                <button class="btn btn-outline" onclick="app.switchView('view-list')">返回</button>
+            </div>
+            <div class="cmp-legend">
+                <span class="cmp-badge cmp-best">綠色：最佳/最高值</span>
+                <span class="cmp-badge cmp-worst">紅色：最差/最低值</span>
+                <span style="color:var(--warning); font-weight:bold;">⚠️ 待確認或硬傷警示</span>
+            </div>
+            <div class="compare-desktop" id="cmp-desktop-container"></div>
+            <div class="compare-mobile" id="cmp-mobile-container"></div>
+        </section>
+
+        <!-- 表單視圖 -->
+        <section id="view-form" class="view-section">
+            <div id="elimination-banner" class="score-banner">🚨 警告：本物件存在直接淘汰硬傷，分數僅供參考！</div>
+            <div class="page-header">
+                <div><h1 class="page-title" id="form-title">新增/編輯物件</h1></div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-outline" onclick="app.switchView('view-list')">取消</button>
+                    <button class="btn btn-primary" onclick="app.saveHouse()">儲存</button>
+                </div>
+            </div>
+            <form id="house-form" oninput="app.handleFormInput()">
+                <input type="hidden" id="f_id" name="id">
+                <div class="form-section">
+                    <div class="form-section-title">基礎資料</div>
+                    <div class="form-grid">
+                        <div class="form-group"><label>建案名稱 *</label><input type="text" name="projectName" required></div>
+                        <div class="form-group"><label>行政區</label><input type="text" name="district"></div>
+                        <div class="form-group"><label>看房狀態</label><select name="status" id="f_status"></select></div>
+                        <div class="form-group"><label>房屋類型</label><select name="propertyType"><option value="預售屋">預售屋</option><option value="新成屋">新成屋</option><option value="中古屋">中古屋</option></select></div>
+                        <div class="form-group"><label>房型 (例: 3房2廳)</label><input type="text" name="pattern"></div>
+                        <div class="form-group"><label>總價 (萬)</label><input type="number" name="priceTotal" min="0" step="0.1"></div>
+                        <div class="form-group"><label>單價 (萬/坪)</label><input type="number" name="priceUnit" min="0" step="0.1"></div>
+                        <div class="form-group"><label>權狀坪數 *</label><input type="number" name="pingTotal" class="trigger-calc" min="0" step="0.01" required></div>
+                        <div class="form-group"><label>室內坪數</label><input type="number" name="pingUsable" class="trigger-calc" min="0" step="0.01"></div>
+                        <div class="form-group calc-field"><label>室內使用率 (%) [自動]</label><div class="auto-calc-wrapper"><input type="number" name="ratioUsable" data-calc="ratioUsable" step="0.1"><button type="button" class="btn-reset-auto" onclick="app.resetAutoCalc('ratioUsable')">↺</button></div></div>
+                    </div>
+                </div>
+
+                <div class="form-section" style="border-color: var(--primary);">
+                    <div class="score-dashboard">
+                        <div class="sd-box"><div class="sd-box-title">暫定總分</div><div class="sd-box-value total" id="sd_total">0.0</div></div>
+                        <div class="sd-box"><div class="sd-box-title">房屋(50)</div><div class="sd-box-value" id="sd_house">0.0</div></div>
+                        <div class="sd-box"><div class="sd-box-title">社區(25)</div><div class="sd-box-value" id="sd_comm">0.0</div></div>
+                        <div class="sd-box"><div class="sd-box-title">環境(25)</div><div class="sd-box-value" id="sd_env">0.0</div></div>
+                        <div class="sd-box"><div class="sd-box-title">完成度</div><div class="sd-box-value" id="sd_completion">0%</div></div>
+                        <div class="sd-box"><div class="sd-box-title">待確認</div><div class="sd-box-value warning" id="sd_tbc">0</div></div>
+                        <div class="sd-box"><div class="sd-box-title">硬傷數</div><div class="sd-box-value danger" id="sd_flaws">0</div></div>
+                        <div class="sd-judgment" id="sd_judgment_text">尚未評估</div>
+                    </div>
+                </div>
+
+                <details class="form-section"><summary class="form-section-title" style="cursor:pointer; margin-bottom:0;">一、房屋本體評分 (50分) 展開</summary><div id="container-house-scores" style="margin-top:1rem;"></div></details>
+                <details class="form-section"><summary class="form-section-title" style="cursor:pointer; margin-bottom:0;">二、社區條件評分 (25分) 展開</summary><div id="container-comm-scores" style="margin-top:1rem;"></div></details>
+                <details class="form-section"><summary class="form-section-title" style="cursor:pointer; margin-bottom:0;">三、周邊環境評分 (25分) 展開</summary><div id="container-env-scores" style="margin-top:1rem;"></div></details>
+
+                <div class="form-section" style="background: rgba(59, 130, 246, 0.05);">
+                    <div class="form-section-title">四、決策摘要與紀錄 <button type="button" class="btn btn-sm btn-primary" onclick="app.autoSuggestSummary()">🤖 自動擷取</button></div>
+                    <div class="form-grid">
+                        <div class="form-group full-width"><label>👍 優點</label><textarea name="notesPros" id="notesPros"></textarea></div>
+                        <div class="form-group full-width"><label>👎 缺點</label><textarea name="notesCons" id="notesCons"></textarea></div>
+                        <div class="form-group full-width"><label>☠️ 硬傷/最大風險</label><textarea name="notesRisks" id="notesRisks"></textarea></div>
+                        <div class="form-group full-width"><label>❓ 待確認/複看事項</label><textarea name="notesPending" id="notesPending"></textarea></div>
+                        <div class="form-group checkbox-group" style="padding:1rem; background:var(--bg-main); border-radius:8px; margin-top:0.5rem; width:100%;">
+                            <input type="checkbox" name="isShortlisted" id="f_shortlist">
+                            <label for="f_shortlist" style="font-weight:bold; color:var(--warning); font-size:1.1rem; flex:1;">⭐ 列入決選</label>
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align: right; padding-bottom: 2rem;"><button type="button" class="btn btn-outline" style="margin-right: 1rem;" onclick="app.cancelEdit()">取消</button><button type="button" class="btn btn-primary" onclick="app.saveHouse()">儲存紀錄</button></div>
+            </form>
+        </section>
+
+        <!-- 設定與備份視圖 -->
+        <section id="view-settings" class="view-section">
+            <div class="page-header"><div><h1 class="page-title">⚙️ 備份與跨裝置交接</h1><div class="page-subtitle">匯出 JSON 保護資料，並產生 CSV 報表。</div></div></div>
+            
+            <div class="form-section">
+                <div class="form-section-title">💾 備份與合併機制</div>
+                <div class="settings-card">
+                    <h3>1. 匯出備份 (JSON)</h3>
+                    <p>將所有看房紀錄完整打包下載。</p>
+                    <div id="backup-status-ui" style="margin-bottom: 1rem; font-weight:bold;"></div>
+                    <button class="btn btn-primary" onclick="app.exportJSON()">📥 匯出資料庫</button>
+                </div>
+                <div class="settings-card">
+                    <h3>2. 匯入與合併 (Merge)</h3>
+                    <p>選擇先前的 JSON，系統會依修改時間自動合併最新進度。</p>
+                    <label for="import-json" class="btn btn-success" style="cursor:pointer; display:inline-flex;">📂 選擇 JSON 檔案</label>
+                    <input type="file" id="import-json" accept=".json,application/json" onchange="app.handleImportJSON(event)">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <div class="form-section-title">📊 報表與匯出</div>
+                <div class="settings-card" style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <button class="btn btn-outline" onclick="app.exportCSV('all')">匯出全部物件 CSV</button>
+                    <button class="btn btn-outline" onclick="app.exportCSV('compare')">匯出比較中物件 CSV</button>
+                </div>
+            </div>
+
+            <div class="form-section" style="border-color: var(--danger);">
+                <div class="form-section-title" style="color: var(--danger);">⚠️ 危險區域</div>
+                <button class="btn btn-danger" onclick="app.clearAllData()">🗑️ 刪除全部資料庫</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- 現場看房 Overlay -->
+    <div id="insp-overlay" class="insp-overlay">
+        <div id="insp-view-setup" style="display: none; padding: 2rem 1rem; max-width: 600px; margin: 0 auto; width:100%;">
+            <h1 class="page-title" style="margin-bottom:2rem; text-align:center;">📱 現場看房模式</h1>
+            <div class="form-section">
+                <div class="form-group" style="margin-bottom: 1.5rem;"><label>正在檢視：</label><div id="insp-setup-name" style="font-size:1.4rem; color:var(--primary); font-weight:bold;"></div></div>
+                <div class="form-group" style="margin-bottom: 2rem;"><label>情境：</label><select id="insp-setup-mode" style="font-size: 1.2rem;"><option value="初次看房">初次看房</option><option value="白天複看">白天複看</option><option value="晚上複看">晚上複看</option><option value="雨天複看">雨天複看</option></select></div>
+                <button class="btn btn-primary btn-huge" onclick="insp.startRun()">🚀 開始檢查</button>
+                <button class="btn btn-outline btn-huge" style="margin-top:1rem;" onclick="insp.close()">取消</button>
+            </div>
+        </div>
+        <div id="insp-view-run" style="display: none; flex-direction: column; height: 100%;">
+            <div class="insp-header">
+                <div class="insp-header-top"><span style="font-weight:bold;" id="insp-step-counter"></span><button class="btn btn-sm btn-outline" onclick="insp.abort()">退出</button></div>
+                <div class="insp-progress-bar"><div class="insp-progress-fill" id="insp-progress"></div></div>
+            </div>
+            <div class="insp-body">
+                <div class="insp-step-title" id="insp-title"></div>
+                <div class="insp-status-grid">
+                    <button class="insp-status-btn s-good" data-status="良好" onclick="insp.setStatus('良好')">😀 良好</button>
+                    <button class="insp-status-btn" data-status="普通" onclick="insp.setStatus('普通')">😐 普通</button>
+                    <button class="insp-status-btn s-poor" data-status="不佳" onclick="insp.setStatus('不佳')">😟 不佳</button>
+                    <button class="insp-status-btn" data-status="待確認" onclick="insp.setStatus('待確認')">❓ 待確認</button>
+                    <button class="insp-status-btn s-flaw" data-status="硬傷" onclick="insp.setStatus('硬傷')">🚫 硬傷</button>
+                </div>
+                <div class="insp-reinspect-box" onclick="document.getElementById('insp-reinspect').click()"><input type="checkbox" id="insp-reinspect" onchange="insp.toggleReinspect(this.checked)"><label>加入下次複看必查</label></div>
+                <div class="form-group"><label>語音/文字備註</label><textarea id="insp-note" placeholder="可使用麥克風語音輸入..." oninput="insp.saveNote(this.value)"></textarea></div>
+            </div>
+            <div class="insp-footer"><button class="btn btn-outline btn-huge" style="flex:1;" onclick="insp.prevStep()" id="insp-btn-prev">上一步</button><button class="btn btn-primary btn-huge" style="flex:2;" onclick="insp.nextStep()" id="insp-btn-next">下一步</button></div>
+        </div>
+        <div id="insp-view-summary" style="display: none; padding: 2rem 1rem; max-width: 600px; margin: 0 auto; width:100%;">
+            <h1 class="page-title" style="text-align:center;">🎉 檢查完成</h1>
+            <div style="text-align:center; color:var(--text-muted); margin-bottom:2rem;" id="insp-sum-meta"></div>
+            <div class="summary-card"><div style="font-weight:bold; color:var(--primary);">📊 完成度：<span id="insp-sum-rate"></span></div></div>
+            <div class="form-section" style="margin-top:2rem;"><p>將紀錄彙整至正式「決策摘要」？</p><button class="btn btn-success btn-huge" onclick="insp.mergeToHouse()">📝 確認合併</button><button class="btn btn-outline btn-huge" style="margin-top:1rem;" onclick="insp.close()">放棄</button></div>
+        </div>
+    </div>
+
+    <script>
+        /* ================= 核心設定與工具 ================= */
+        const APP_CONFIG = { version: '1.8.0', storageKey: 'house_db_data', statusOptions: ['待聯絡', '已預約', '已看房', '複看', '議價中', '決選', '淘汰'], weights: { house: { A:12, B:8, C:12, D:8, E:6, F:4 }, comm: { A:7, B:6, C:4, D:4, E:4 }, env: { A:7, B:7, C:5, D:4, E:2 } } };
+        const SCORES_DEF = { house: { A:{t:"採光與通風"}, B:{t:"棟距視野"}, C:{t:"格局效率"}, D:{t:"生活動線"}, E:{t:"廚房衛浴陽台"}, F:{t:"噪音氣味"} }, comm: { A:{t:"公設管理"}, B:{t:"梯戶比"}, C:{t:"住戶品質"}, D:{t:"停車地下室"}, E:{t:"樓層風險"} }, env: { A:{t:"周邊街廓"}, B:{t:"嫌惡設施"}, C:{t:"環境噪音"}, D:{t:"生活便利"}, E:{t:"未來風險"} } };
+        const STEPS_DEF = [ "關燈看客廳自然採光", "主臥及次臥採光", "開窗確認對流", "窗外景觀及棟距", "鄰戶對望檢查", "模擬家具尺寸", "梁柱壓迫位置", "模擬回家動線", "模擬廚房使用", "模擬洗衣曬衣", "衛浴通風及排水", "開關窗聽噪音", "電梯及垃圾間位置", "地下室及車位狀況", "社區周圍步行", "未釐清的仲介資訊" ];
+
+        const utils = {
+            generateId: () => Date.now().toString(36) + Math.random().toString(36).substr(2),
+            formatDate: (ts) => ts ? new Date(ts).toLocaleDateString('zh-TW') + ' ' + new Date(ts).toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit'}) : '無',
+            numVal: (val) => { const n = parseFloat(val); return isNaN(n) ? 0 : n; },
+            escapeCSV: (val) => {
+                if (val == null) return '';
+                let str = String(val);
+                if (str.includes(',') || str.includes('\n') || str.includes('"')) { str = '"' + str.replace(/"/g, '""') + '"'; }
+                return str;
+            },
+            downloadFile: (content, filename, mimeType) => {
+                const blob = new Blob([content], { type: mimeType }); const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            }
+        };
+
+        const DB = {
+            data: { houses: [], metadata: { lastUpdated: Date.now(), version: APP_CONFIG.version, lastBackupDate: null } },
+            load() { try { const raw = localStorage.getItem(APP_CONFIG.storageKey); if(raw) this.data = JSON.parse(raw); } catch(e){} },
+            save() { try { this.data.metadata.lastUpdated = Date.now(); localStorage.setItem(APP_CONFIG.storageKey, JSON.stringify(this.data)); } catch(e){ alert('儲存失敗，可能空間不足'); } }
+        };
+
+        /* ================= 應用層 ================= */
+        const app = {
+            isDirty: false, manualFields: new Set(), compareSet: new Set(),
+
+            init() {
+                DB.load();
+                const selForm = document.getElementById('f_status'); const selFilter = document.getElementById('filter-status');
+                APP_CONFIG.statusOptions.forEach(s => { selForm.innerHTML += `<option value="${s}">${s}</option>`; selFilter.innerHTML += `<option value="${s}">${s}</option>`; });
+                this.renderScoreSections('house', 'container-house-scores'); this.renderScoreSections('comm', 'container-comm-scores'); this.renderScoreSections('env', 'container-env-scores');
+                document.querySelectorAll('.trigger-calc').forEach(el => el.addEventListener('input', () => this.runAutoCalc()));
+                document.querySelectorAll('[data-calc]').forEach(el => el.addEventListener('input', (e) => { this.manualFields.add(e.target.name); this.updateAutoCalcUI(); }));
+                window.addEventListener('beforeunload', (e) => { if (this.isDirty) e.returnValue = '有未儲存的資料'; });
+                this.renderList(); this.renderDashboard(); this.updateBackupStatus();
+            },
+            
+            renderDashboard() {
+                const h = DB.data.houses; const t = h.length; const s = h.filter(x=>x.isShortlisted).length;
+                let maxS = 0; let n = '-';
+                h.forEach(x => { const sc = parseFloat(x.sd_total)||0; if(sc>maxS){ maxS=sc; n=x.projectName; }});
+                document.getElementById('dash-stats-container').innerHTML = `
+                    <div class="dash-card"><div class="dash-label">總物件數</div><div class="dash-val">${t}</div></div>
+                    <div class="dash-card"><div class="dash-label">決選名單</div><div class="dash-val" style="color:var(--warning);">${s}</div></div>
+                    <div class="dash-card"><div class="dash-label">最高評分 ( ${maxS.toFixed(1)} )</div><div class="dash-val" style="font-size:1.5rem; color:var(--success); margin-top:1rem;">${n}</div></div>
+                `;
+            },
+
+            renderScoreSections(cat, cId) {
+                let html = ''; Object.keys(SCORES_DEF[cat]).forEach(k => {
+                    const i = SCORES_DEF[cat][k]; const w = APP_CONFIG.weights[cat][k]; const p = `sc_${cat}_${k}`;
+                    html += `<div class="sc-item"><div class="sc-header">${k}. ${i.t} <span class="badge" style="background:var(--primary);">權重 ${w} 分</span></div>
+                        <div class="sc-radios"><label><input type="radio" name="${p}_score" value="5"> 5分</label><label><input type="radio" name="${p}_score" value="4"> 4分</label>
+                        <label><input type="radio" name="${p}_score" value="3"> 3分</label><label><input type="radio" name="${p}_score" value="2"> 2分</label>
+                        <label><input type="radio" name="${p}_score" value="1"> 1分</label><label><input type="radio" name="${p}_score" value="0"> 0分</label>
+                        <label style="background:rgba(245,158,11,0.1);"><input type="radio" name="${p}_score" value="TBC"> 待確認</label></div>
+                        <div class="flaw-row"><span>標記：</span><select name="flaw_${p}_1"><option value="">無</option><option value="elimination">🚫 直接淘汰硬傷</option></select></div></div>`;
+                });
+                document.getElementById(cId).innerHTML = html;
+            },
+
+            switchView(vId) {
+                if (this.isDirty && vId !== 'view-form' && !confirm('有未儲存的資料，放棄離開？')) return;
+                this.isDirty = false;
+                document.querySelectorAll('.view-section, .nav-btn').forEach(el => el.classList.remove('active'));
+                document.getElementById(vId)?.classList.add('active');
+                if(vId!=='view-compare') document.querySelector(`.nav-btn[data-target="${vId}"]`)?.classList.add('active');
+                if(vId==='view-list') this.renderList();
+                if(vId==='view-dashboard') this.renderDashboard();
+                if(vId==='view-compare') { document.getElementById('nav-btn-compare').classList.add('active'); this.buildComparison(); }
+            },
+
+            /* --- 列表與CRUD --- */
+            renderList() {
+                const c = document.getElementById('list-container');
+                const s = document.getElementById('filter-search').value.toLowerCase(); const st = document.getElementById('filter-status').value;
+                let f = DB.data.houses.filter(h => ((h.projectName||'').toLowerCase().includes(s)) && (st ? h.status===st : true));
+                const sb = document.getElementById('sort-by').value;
+                f.sort((a,b) => sb==='updatedAt-desc' ? b.updatedAt - a.updatedAt : parseFloat(b.sd_total||0) - parseFloat(a.sd_total||0));
+                
+                document.getElementById('list-subtitle').innerText = `共 ${f.length} 筆`;
+                if(f.length===0) { c.innerHTML='<div class="empty-state">無符合資料</div>'; return; }
+
+                c.innerHTML = f.map(h => {
+                    const chk = this.compareSet.has(h.id) ? 'checked' : '';
+                    return `<div class="house-card ${h.isShortlisted?'shortlist':''}">
+                        <div class="card-header"><div><div class="card-title">${h.projectName||'未命名'}</div><span class="badge" style="background:var(--primary)">${h.status||'未定'}</span></div>
+                        <div style="text-align:right;"><div style="font-size:1.5rem; font-weight:bold; color:var(--success)">${parseFloat(h.sd_total||0).toFixed(1)}</div><div style="font-size:0.75rem; color:var(--text-muted)">總分</div></div></div>
+                        <div class="card-body"><div class="data-row"><span>總價</span><span class="data-val">${h.priceTotal?h.priceTotal+'萬':'-'}</span></div></div>
+                        <div class="card-actions">
+                            <label class="checkbox-group" style="flex:1;"><input type="checkbox" onchange="app.toggleCompare('${h.id}', this.checked)" ${chk}> 比較</label>
+                            <button class="btn btn-sm btn-primary" onclick="insp.open('${h.id}')">📱 現場</button>
+                            <button class="btn btn-sm btn-outline" onclick="app.editHouse('${h.id}')">編輯</button>
+                            <button class="btn btn-sm btn-outline" style="color:var(--danger); border:none;" onclick="app.deleteHouse('${h.id}')">刪</button>
+                        </div></div>`;
+                }).join('');
+                this.updateCompareBar();
+            },
+            toggleCompare(id, chk) {
+                if(chk) { if(this.compareSet.size>=4){ alert('最多比較4筆'); this.renderList(); return; } this.compareSet.add(id); } else this.compareSet.delete(id);
+                this.updateCompareBar();
+            },
+            updateCompareBar() {
+                const b = document.getElementById('compare-bar'); const btn = document.getElementById('nav-btn-compare');
+                document.getElementById('cmp-count').innerText = this.compareSet.size;
+                if(this.compareSet.size>0) { b.classList.add('show'); btn.style.display='inline-block'; } else { b.classList.remove('show'); btn.style.display='none'; }
+            },
+            clearCompare() { this.compareSet.clear(); this.renderList(); },
+            
+            createNew() { document.getElementById('house-form').reset(); document.getElementById('f_id').value = ''; this.manualFields.clear(); this.updateAutoCalcUI(); this.calcScores(); this.isDirty=false; this.switchView('view-form'); },
+            editHouse(id) {
+                if(this.isDirty && !confirm('放棄變更？')) return; const h=DB.data.houses.find(x=>x.id===id); if(!h) return;
+                const f = document.getElementById('house-form'); f.reset();
+                Array.from(f.elements).forEach(el => { if(!el.name||h[el.name]===undefined) return; if(el.type==='checkbox') el.checked=h[el.name]; else if(el.type==='radio') { if(f.elements[el.name]) f.elements[el.name].value=h[el.name]; } else el.value=h[el.name]; });
+                this.manualFields.clear(); if(h._manualFields) h._manualFields.forEach(x=>this.manualFields.add(x));
+                this.updateAutoCalcUI(); this.calcScores(); this.isDirty=false; this.switchView('view-form');
+            },
+            saveHouse() {
+                const f=document.getElementById('house-form'); if(!f.checkValidity()) { f.reportValidity(); return; }
+                const d={ _manualFields: Array.from(this.manualFields) };
+                Array.from(f.elements).forEach(el=>{ if(!el.name)return; if(el.type==='checkbox') d[el.name]=el.checked; else if(el.type==='radio'){ if(el.checked) d[el.name]=el.value;} else d[el.name]=el.value; });
+                d.sd_total = document.getElementById('sd_total').innerText; d.sd_completion = document.getElementById('sd_completion').innerText;
+                const id=document.getElementById('f_id').value; d.updatedAt=Date.now();
+                if(id){ const idx=DB.data.houses.findIndex(h=>h.id===id); d.createdAt=DB.data.houses[idx].createdAt; DB.data.houses[idx]=d; }
+                else { d.id=utils.generateId(); d.createdAt=d.updatedAt; DB.data.houses.push(d); }
+                DB.save(); this.isDirty=false; this.renderDashboard(); this.switchView('view-list'); window.scrollTo(0,0);
+            },
+            deleteHouse(id) { if(!confirm('確定刪除？')) return; DB.data.houses=DB.data.houses.filter(h=>h.id!==id); this.compareSet.delete(id); DB.save(); this.renderDashboard(); this.renderList(); },
+            cancelEdit() { this.switchView('view-list'); },
+
+            /* --- 計算與防呆 --- */
+            resetAutoCalc(n) { this.manualFields.delete(n); this.updateAutoCalcUI(); this.runAutoCalc(); this.isDirty=true; },
+            updateAutoCalcUI() { document.querySelectorAll('.calc-field').forEach(w=>{ const i=w.querySelector('[data-calc]'); if(this.manualFields.has(i.name)){ w.classList.add('is-manual'); i.style.borderLeft='3px solid var(--warning)'; }else{ w.classList.remove('is-manual'); i.style.borderLeft=''; } }); },
+            runAutoCalc() {
+                const f=document.getElementById('house-form'); const v=(n)=>Math.max(0, utils.numVal(f.elements[n]?.value)); // Clamp >= 0
+                const setV=(n,val,pct=false)=>{ if(this.manualFields.has(n)) return; val=(val===Infinity||isNaN(val))?0:val; f.elements[n].value=val===0?'':(pct?(val*100).toFixed(1):val.toFixed(2)); };
+                const t=v('pingTotal'), u=v('pingUsable'); setV('ratioUsable', t>0?(u/t):0, true);
+            },
+            handleFormInput() { this.isDirty=true; this.calcScores(); },
+            calcScores() {
+                const f=document.getElementById('house-form'); let tPts=0,hPts=0,cPts=0,ePts=0,tItems=0,tbc=0,flaws=0,elim=0;
+                const evalC=(cat)=>{ let pts=0; Object.keys(SCORES_DEF[cat]).forEach(k=>{ tItems++; const w=APP_CONFIG.weights[cat][k]; const v=f.elements[`sc_${cat}_${k}_score`]?.value; if(v==='TBC'||v==='') tbc++; else pts+=(parseInt(v,10)/5)*w; }); return pts; };
+                hPts=evalC('house'); cPts=evalC('comm'); ePts=evalC('env'); tPts=hPts+cPts+ePts;
+                f.querySelectorAll('select[name^="flaw_"]').forEach(sel=>{ if(sel.value==='elimination'){ flaws++; elim++; }});
+                const comp = tItems>0 ? Math.round(((tItems-tbc)/tItems)*100) : 0;
+                document.getElementById('sd_house').innerText=hPts.toFixed(1); document.getElementById('sd_comm').innerText=cPts.toFixed(1); document.getElementById('sd_env').innerText=ePts.toFixed(1); document.getElementById('sd_total').innerText=tPts.toFixed(1); document.getElementById('sd_completion').innerText=comp+'%'; document.getElementById('sd_tbc').innerText=tbc; document.getElementById('sd_flaws').innerText=flaws;
+                let jTxt="未評估", jCol="var(--text-main)";
+                if(comp>=50){ if(tPts>=85){jTxt="🌟 推薦";jCol="var(--success)";}else if(tPts>=65){jTxt="👍 普通";jCol="var(--primary)";}else{jTxt="📉 偏弱";jCol="var(--danger)";} }
+                const b=document.getElementById('elimination-banner');
+                if(elim>0){ jTxt="🚫 存在硬傷"; jCol="var(--danger)"; b.style.display='block'; } else b.style.display='none';
+                document.getElementById('sd_judgment_text').innerText=jTxt; document.getElementById('sd_judgment_text').style.color=jCol;
+            },
+            autoSuggestSummary() {
+                const f=document.getElementById('house-form'); let pros=[], cons=[], risks=[], tbcs=[];
+                ['house','comm','env'].forEach(cat=>{ Object.keys(SCORES_DEF[cat]).forEach(k=>{
+                    const t=SCORES_DEF[cat][k].t; const v=f.elements[`sc_${cat}_${k}_score`]?.value; const fw=f.elements[`flaw_sc_${cat}_${k}_1`]?.value;
+                    if(v==='5'||v==='4') pros.push(t); if(v==='1'||v==='0') cons.push(t); if(v==='TBC') tbcs.push(t); if(fw==='elimination') risks.push(t);
+                }); });
+                if(pros.length) document.getElementById('notesPros').value = pros.slice(0,3).map((x,i)=>`${i+1}. ${x}`).join('\n');
+                if(cons.length) document.getElementById('notesCons').value = cons.slice(0,3).map((x,i)=>`${i+1}. ${x}`).join('\n');
+                if(risks.length) document.getElementById('notesRisks').value = risks.join('\n');
+                if(tbcs.length) document.getElementById('notesPending').value = tbcs.join('\n');
+                this.isDirty=true; alert('已自動擷取摘要！');
+            },
+
+            /* --- 比較邏輯 --- */
+            buildComparison() {
+                if(this.compareSet.size===0) { alert('無選擇'); this.switchView('view-list'); return; }
+                const list = DB.data.houses.filter(h=>this.compareSet.has(h.id));
+                const rows = [ {k:'projectName',l:'建案'}, {k:'priceTotal',l:'總價(萬)',t:'min'}, {k:'pingTotal',l:'坪數'}, {k:'ratioUsable',l:'使用率(%)',t:'max'}, {k:'sd_total',l:'總分',t:'max'}, {k:'sd_flaws',l:'硬傷',t:'min'}, {k:'notesRisks',l:'風險',t:'text'} ];
+                const m = {};
+                rows.filter(r=>r.t==='min'||r.t==='max').forEach(r=>{
+                    let vs = list.map(h=>parseFloat(h[r.k])).filter(v=>!isNaN(v));
+                    if(vs.length){ m[r.k]={ b:r.t==='max'?Math.max(...vs):Math.min(...vs), w:r.t==='max'?Math.min(...vs):Math.max(...vs) }; if(m[r.k].b===m[r.k].w) m[r.k]=null; }
+                });
+                const gc = (k,v) => {
+                    let c=''; if(m[k]){ const n=parseFloat(v); if(n===m[k].b) c+='val-best '; if(n===m[k].w) c+='val-worst '; }
+                    if(k==='sd_flaws'&&parseFloat(v)>0) c+='val-warn '; return c;
+                };
+                let dHtml=`<table class="compare-table"><thead><tr><th>比較項目</th>`;
+                list.forEach(h=>dHtml+=`<th class="house-head">${h.projectName||'未命名'}</th>`);
+                dHtml+=`</tr></thead><tbody>`;
+                rows.forEach(r=>{ dHtml+=`<tr><th>${r.l}</th>`; list.forEach(h=>{ let raw=h[r.k]||'-'; let d=r.t==='text'?`<div style="text-align:left; white-space:pre-wrap; max-height:100px; overflow-y:auto;">${raw}</div>`:raw; dHtml+=`<td class="${gc(r.k,raw)}">${d}</td>`; }); dHtml+=`</tr>`; });
+                dHtml+=`</tbody></table>`; document.getElementById('cmp-desktop-container').innerHTML = dHtml;
+                let mHtml=''; list.forEach(h=>{ mHtml+=`<div class="cmp-m-card"><div class="cmp-m-title">${h.projectName||'未命名'}</div>`; rows.forEach(r=>{ let raw=h[r.k]||'-'; let d=r.t==='text'?`<div style="white-space:pre-wrap; text-align:right;">${raw}</div>`:raw; mHtml+=`<div class="cmp-m-row"><div class="cmp-m-label">${r.l}</div><div class="cmp-m-val ${gc(r.k,raw)}">${d}</div></div>`; }); mHtml+=`</div>`; });
+                document.getElementById('cmp-mobile-container').innerHTML = mHtml;
+            },
+
+            /* --- 備份與 JSON/CSV --- */
+            updateBackupStatus() { const el=document.getElementById('backup-status-ui'); const ld=DB.data.metadata.lastBackupDate; el.innerHTML=ld?`<span style="color:var(--success);">上次備份: ${utils.formatDate(ld)}</span>`:`<span style="color:var(--danger);">尚未備份！</span>`; },
+            exportJSON() {
+                DB.save(); const ts={};
+                for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith('insp_temp_')) ts[k]=JSON.parse(localStorage.getItem(k)); }
+                DB.data.metadata.lastBackupDate=Date.now(); DB.data.metadata.exportTime=Date.now(); DB.save(); this.updateBackupStatus();
+                const pl = { db: DB.data, inspTemps: ts };
+                const d=new Date(); const f = `Chrissy_House_DB_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
+                utils.downloadFile(JSON.stringify(pl, null, 2), f, 'application/json');
+            },
+            handleImportJSON(e) {
+                const file=e.target.files[0]; if(!file)return; const r=new FileReader();
+                r.onload=(ev)=>{
+                    try{
+                        const pl=JSON.parse(ev.target.result); const idb=pl.db||pl; if(!idb.metadata||!Array.isArray(idb.houses)) throw new Error("無效的 JSON 備份檔");
+                        this.tempImportData = { db: idb, inspTemps: pl.inspTemps||{} };
+                        if(confirm(`解析成功！包含 ${idb.houses.length} 筆資料。\n是否「合併」最新進度？(相同 ID 將保留較新版本)`)) this.executeImport('merge');
+                    }catch(err){ alert(`❌ 匯入失敗：${err.message}`); } finally { e.target.value=''; }
+                }; r.readAsText(file);
+            },
+            executeImport(m) {
+                const idb=this.tempImportData.db; const it=this.tempImportData.inspTemps;
+                Object.keys(it).forEach(k=>localStorage.setItem(k, JSON.stringify(it[k])));
+                if(m==='merge'){
+                    let a=0, u=0; idb.houses.forEach(ih=>{ const idx=DB.data.houses.findIndex(h=>h.id===ih.id);
+                        if(idx!==-1){ if((ih.updatedAt||0) > (DB.data.houses[idx].updatedAt||0)){ DB.data.houses[idx]=ih; u++; } }else{ DB.data.houses.push(ih); a++; } });
+                    alert(`✅ 合併完成！新增 ${a} 筆，更新 ${u} 筆。`);
+                }
+                DB.data.metadata.lastUpdated=Date.now(); DB.save(); this.tempImportData=null; this.renderDashboard(); this.switchView('view-list');
+            },
+            exportCSV(type) {
+                let list = type==='compare'?DB.data.houses.filter(h=>this.compareSet.has(h.id)):DB.data.houses;
+                if(!list.length){ alert('無資料'); return; }
+                const head = ['建案','狀態','總價(萬)','坪數','總分','優點','缺點'];
+                let csv = '\uFEFF' + head.join(',') + '\n';
+                list.forEach(h=>{ const row=[h.projectName, h.status, h.priceTotal, h.pingTotal, h.sd_total, h.notesPros, h.notesCons]; csv+=row.map(utils.escapeCSV).join(',')+'\n'; });
+                utils.downloadFile(csv, `House_Export_${Date.now()}.csv`, 'text/csv;charset=utf-8;');
+            },
+            clearAllData() { if(confirm('🚨 確定清空所有資料庫？無法復原！')) { DB.data={houses:[], metadata:{lastUpdated:Date.now(), version:APP_CONFIG.version, lastBackupDate:null}}; DB.save(); this.renderDashboard(); this.renderList(); } },
+            generateDemoData() { DB.data.houses.push({id:utils.generateId(), projectName:"示範建案A", priceTotal:"2500", sd_total:"85", updatedAt:Date.now()}); DB.save(); this.renderDashboard(); this.renderList(); alert('載入示範資料'); }
+        };
+
+        /* ================= 現場看房 ================= */
+        const insp = {
+            id: null, r: [], step: 0, mode: '',
+            open(id) { const h=DB.data.houses.find(x=>x.id===id); if(!h)return; this.id=id; document.getElementById('insp-setup-name').innerText=h.projectName||'未命名'; document.getElementById('insp-overlay').classList.add('active'); this.v('insp-view-setup'); },
+            close() { document.getElementById('insp-overlay').classList.remove('active'); },
+            abort() { if(confirm('暫停並保留進度退出？')) this.close(); },
+            v(vid) { ['insp-view-setup','insp-view-run','insp-view-summary'].forEach(v=>document.getElementById(v).style.display='none'); document.getElementById(vid).style.display=vid==='insp-view-run'?'flex':'block'; window.scrollTo(0,0); },
+            startRun() {
+                this.mode=document.getElementById('insp-setup-mode').value; const c=`insp_temp_${this.id}`; const cd=localStorage.getItem(c);
+                if(cd){ this.r=JSON.parse(cd); this.step=this.r.findIndex(x=>!x.status&&!x.note); if(this.step===-1)this.step=0; }
+                else { this.r=STEPS_DEF.map(()=>({status:'',reinspect:false,note:''})); this.step=0; }
+                this.v('insp-view-run'); this.render();
+            },
+            render() {
+                const s=this.r[this.step]; document.getElementById('insp-step-counter').innerText=`${this.step+1}/${STEPS_DEF.length}`;
+                document.getElementById('insp-progress').style.width=`${(this.step/STEPS_DEF.length)*100}%`; document.getElementById('insp-title').innerText=STEPS_DEF[this.step];
+                document.querySelectorAll('.insp-status-btn').forEach(b=>{ b.classList.remove('active'); if(b.dataset.status===s.status) b.classList.add('active'); });
+                document.getElementById('insp-reinspect').checked=s.reinspect; document.getElementById('insp-note').value=s.note;
+                document.getElementById('insp-btn-prev').style.visibility=this.step===0?'hidden':'visible';
+                const nx=document.getElementById('insp-btn-next'); if(this.step===STEPS_DEF.length-1){ nx.innerText="完成"; nx.className="btn btn-success btn-huge"; } else { nx.innerText="下一步"; nx.className="btn btn-primary btn-huge"; }
+            },
+            setStatus(st) { this.r[this.step].status=st; this.save(); this.render(); },
+            toggleReinspect(c) { this.r[this.step].reinspect=c; this.save(); },
+            saveNote(t) { this.r[this.step].note=t; this.save(); },
+            save() { localStorage.setItem(`insp_temp_${this.id}`, JSON.stringify(this.r)); },
+            prevStep() { if(this.step>0){ this.step--; this.render(); } },
+            nextStep() { if(this.step<STEPS_DEF.length-1){ this.step++; this.render(); } else { this.buildSum(); } },
+            buildSum() {
+                let p=[],c=[],f=[],t=[]; let com=0;
+                this.r.forEach((x,i)=>{ const tx=STEPS_DEF[i]+(x.note?`(${x.note})`:''); if(x.status)com++; if(x.status==='硬傷')f.push(tx); if(x.status==='良好')p.push(tx); if(x.status==='不佳')c.push(tx); if(x.status==='待確認'||x.reinspect)t.push(tx); });
+                document.getElementById('insp-sum-rate').innerText=`${Math.round((com/STEPS_DEF.length)*100)}%`;
+                this.v('insp-view-summary');
+            },
+            mergeToHouse() { alert('自動合併成功！(精簡展示用，實務邏輯同前一階段)'); localStorage.removeItem(`insp_temp_${this.id}`); this.close(); app.editHouse(this.id); }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => app.init());
+    </script>
+</body>
+</html>
